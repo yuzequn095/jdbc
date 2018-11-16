@@ -1,0 +1,142 @@
+/*
+ * Name: Zequn Yu
+ * ID: A14712777
+ */
+
+
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+
+public class PA2 {
+	public static void main(String[] args) {
+		Connection conn = null; // Database connection.
+		try {
+			// Load the JDBC class.
+			Class.forName("org.sqlite.JDBC");
+			// Get the connection to the database.
+			// - "jdbc" : JDBC connection name prefix.
+			// - "sqlite" : The concrete database implementation
+			// (e.g., sqlserver, postgresql).
+			// - "pa2.db" : The name of the database. In this project,
+			// we use a local database named "pa2.db". This can also
+			// be a remote database name.
+			conn = DriverManager.getConnection("jdbc:sqlite:pa2.db");
+			//System.out.println("Opened database successfully.");
+			// Use case #1: Create and populate a table.
+			// Get a Statement object.
+			Statement stmt = conn.createStatement();
+			//stmt.executeUpdate("DROP TABLE IF EXISTS Student;");
+			stmt.executeUpdate("DROP TABLE IF EXISTS Connected;");
+			// Student table is being created just as an example. You
+			// do not need Student table in PA2
+			//stmt.executeUpdate("CREATE TABLE Student(FirstName, LastName);");
+			//stmt.executeUpdate("INSERT INTO Student VALUES('F1','L1'),('F2','L2');");
+			stmt.executeUpdate("CREATE TABLE Connected(Airline char(32), Origin char(32), Destination char(32), Stops int);");
+			stmt.executeUpdate("INSERT INTO Connected SELECT Airline, Origin, Destination, 0 FROM Flight;");
+			//use semi‐naïve evaluation for PA2
+			//Check if exist first, then create, and insert last.
+		    stmt.executeUpdate("DROP TABLE IF EXISTS Delta;");
+		    stmt.executeUpdate("CREATE TABLE Delta(Airline char(32), Origin char(32), Destination char(32), Stops int);");
+		    stmt.executeUpdate("INSERT INTO Delta SELECT Airline, Origin, Destination, 0 FROM Flight;");
+		    stmt.executeUpdate("DROP TABLE IF EXISTS Old;");
+		    stmt.executeUpdate("CREATE TABLE Old(Airline char(32), Origin char(32), Destination char(32), Stops int);");
+		    stmt.executeUpdate("INSERT INTO Old SELECT Airline, Origin, Destination, 0 FROM Flight;");
+		    stmt.executeUpdate("DROP TABLE IF EXISTS Temp;");
+		    stmt.executeUpdate("CREATE TABLE Temp(Airline char(32), Origin char(32), Destination char(32), Stops int);");
+		    stmt.executeUpdate("INSERT INTO Temp SELECT Airline, Origin, Destination, 0 FROM Flight;");
+			// Use case #2: Query the Student table with Statement.
+			// Returned query results are stored in a ResultSet
+			// object.
+			//ResultSet rset = stmt.executeQuery("SELECT * from Student;");
+		    ResultSet rset = stmt.executeQuery("SELECT * from Connected");
+			// Print the FirstName and LastName columns.
+			//System.out.println("\nStatement result:");
+			// This shows how to traverse the ResultSet object.
+			//while (rset.next()) {
+				// Get the attribute value.
+				//System.out.print(rset.getString("FirstName"));
+				//System.out.print("---");
+				//System.out.println(rset.getString("LastName"));
+			//}
+			// Use case #3: Query the Student table with
+			// PreparedStatement (having wildcards).
+			//PreparedStatement pstmt = conn.prepareStatement("SELECT * FROM Student WHERE FirstName = ?;");
+			// Assign actual value to the wildcard.
+			//pstmt.setString(1, "F1");
+			//rset = pstmt.executeQuery();
+			//System.out.println("\nPrepared statement result:");
+			//while (rset.next()) {
+				//System.out.print(rset.getString("FirstName"));
+				//System.out.print("---");
+				//System.out.println(rset.getString("LastName"));
+			
+			// Close the ResultSet and Statement objects.
+			//rset.close();
+			int flag = 1;
+			
+			while(flag != 0){
+				//set old 
+				stmt.executeUpdate("DROP TABLE IF EXISTS Old;");
+				stmt.executeUpdate("CREATE TABLE Old(Airline char(32), Origin char(32), Destination char(32), Stops int);");
+				stmt.executeUpdate("INSERT INTO Old SELECT * FROM Connected;");
+				
+			
+				stmt.executeUpdate("DROP TABLE IF EXISTS Temp;");
+				stmt.executeUpdate("CREATE TABLE Temp(Airline char(32), Origin char(32), Destination char(32), Stops int);");
+				stmt.executeUpdate("INSERT INTO Temp "
+								 + "SELECT o.airline, f.origin, o.destination, o.stops + 1 "
+								 + "FROM Flight f,Old o "
+								 + "WHERE o.origin = f.destination AND f.airline = o.airline AND f.origin != o.destination;");
+				
+				stmt.executeUpdate("DROP TABLE IF EXISTS Connected;");
+				stmt.executeUpdate("CREATE TABLE Connected(Airline char(32), Origin char(32), Destination char(32), Stops int);");
+				stmt.executeUpdate("INSERT INTO Connected "
+								   + "SELECT * "
+								   + "FROM Old "
+								   + "UNION "
+								   + "SELECT * "
+								   + "FROM Temp "
+								   + "WHERE NOT EXISTS(SELECT * FROM Old o "
+								   + "WHERE o.origin = Temp.origin AND o.airline = Temp.airline AND o.destination = Temp.destination);");
+				
+				//T - Told
+				stmt.executeUpdate("DROP TABLE IF EXISTS Delta;");
+				stmt.executeUpdate("CREATE TABLE Delta(Airline char(32), Origin char(32), Destination char(32), Stops int);");
+				stmt.executeUpdate("INSERT INTO Delta "
+								    + "SELECT * "
+								    + "FROM Connected "
+								    + "EXCEPT "
+								    + "SELECT * FROM Old;");
+				
+				rset = stmt.executeQuery("SELECT count(*) as res_stp FROM Delta;'");
+				
+				//reset flag
+				flag = rset.getInt("res_stp");
+				
+				//have marked all stops
+				if(flag == 0)
+					rset.close();
+			}
+			
+			//save only Connected tuple
+			stmt.executeUpdate("DROP TABLE IF EXISTS Temp;");
+			stmt.executeUpdate("DROP TABLE IF EXISTS Old;");
+			stmt.executeUpdate("DROP TABLE IF EXISTS Delta;");
+			
+			stmt.close();
+		} catch (Exception e) {
+			throw new RuntimeException("There was a runtime problem!", e);
+		} finally {
+			try {
+				if (conn != null)
+					conn.close();
+			} catch (SQLException e) {
+				throw new RuntimeException("Cannot close the connection!", e);
+			}
+		}
+	}
+}
